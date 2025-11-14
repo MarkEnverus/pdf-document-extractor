@@ -1,12 +1,9 @@
 import os
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from starlette.middleware import Middleware
-from starlette_context import plugins
-from starlette_context.middleware import RawContextMiddleware
 
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
@@ -16,15 +13,9 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 
-from fastapi_utils.plugins.token import TokenPlugin
 from src.configs.settings import settings
-
-from fastapi_utils.middlewares import RequestContextMiddleware
-from fastapi_utils.middlewares import MetricsMiddleware
-from src.api.main import api_router, private_router
+from src.api.main import api_router
 from lib.logger import Logger
-from fastapi_utils.auth.current_user import get_current_user
-from fastapi_utils.middlewares.paginator import PaginationMiddleware
 from src.services.kafka_background_service import kafka_lifespan
 
 
@@ -39,29 +30,16 @@ def custom_generate_unique_id(route: APIRoute) -> str:
 
 
 def get_application() -> FastAPI:
-    middleware = [
-        Middleware(
-            RawContextMiddleware,
-            plugins=(
-                plugins.RequestIdPlugin(),
-                plugins.CorrelationIdPlugin(),
-                TokenPlugin(),
-            ),
-        )
-    ]
-
-    # Use the DI-friendly lifespan function from kafka_background_service
-    # This automatically creates services with proper dependency injection
-
-    # Create FastAPI application only once
+    """Create and configure the FastAPI application."""
+    # Create FastAPI application
     fastapi_kwargs = {
         **settings.fastapi_kwargs,
-        "title": "GenAI Maestro IDP Extraction",
-        "description": "A template for GenAI Maestro IDP Extraction",
+        "title": "PDF Document Extractor",
+        "description": "Standalone PDF document extraction service using Docling",
+        "version": "1.0.0",
         "api_prefix": "",
-        "root_path": "/idp-extraction",
+        "root_path": "/",
         "generate_unique_id_function": custom_generate_unique_id,
-        "middleware": middleware,
         "swagger_ui_parameters": {"syntaxHighlight.theme": "obsidian"},
         "lifespan": kafka_lifespan,
     }
@@ -98,13 +76,11 @@ def get_application() -> FastAPI:
         allow_headers=["*"],
     )
     application.add_middleware(GZipMiddleware, minimum_size=1000)
-    application.add_middleware(RequestContextMiddleware)
-    application.add_middleware(PaginationMiddleware)
-    application.add_middleware(MetricsMiddleware)
 
+    # Include API routers
     application.include_router(api_router, prefix=settings.API_V1_STR)
 
-    application.include_router(private_router, prefix=settings.API_V1_STR, dependencies=[Depends(get_current_user)])
+    logger.info("PDF Document Extractor application initialized successfully")
     return application
 
 

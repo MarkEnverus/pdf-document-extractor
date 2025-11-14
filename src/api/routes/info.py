@@ -1,16 +1,24 @@
 import os
 from typing import Dict, Any
 
-from fastapi import status, Response
-from fastapi_utils.routers.info import info_router
+from fastapi import APIRouter, status, Response
 
 from lib.logger import Logger
 from src.dependencies.providers import ProcessingOrchestratorDep
+
+# Create our own info router for health check endpoints
+info_router = APIRouter()
 
 # Re-export for type checking
 __all__ = ["info_router"]
 
 logger = Logger.get_logger(os.path.basename(__file__))
+
+
+@info_router.get("/liveness", tags=["Healthcheck"], status_code=status.HTTP_200_OK)
+async def liveness_check() -> Dict[str, str]:
+    """Simple liveness check - returns OK if service is running."""
+    return {"status": "ok"}
 
 
 @info_router.get("/readiness", tags=["Healthcheck"], status_code=status.HTTP_200_OK)
