@@ -368,7 +368,7 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
             )
 
             # Process documents with Docling directly (no more wrapper service)
-            docling_result = self._process_documents_batch(docling_request)
+            docling_result = await self._process_documents_batch(docling_request)
 
             # Process and store results
             return await self._handle_docling_results(
@@ -423,7 +423,7 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
                 upload_id=upload_id,
             )
 
-    def _process_documents_batch(self, request: DoclingRequest) -> DoclingBatchResult:
+    async def _process_documents_batch(self, request: DoclingRequest) -> DoclingBatchResult:
         """
         Process documents using Docling with the specified configuration.
 
@@ -452,10 +452,10 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
         successful_count = 0
         failed_count = 0
 
-        # Process each document using local Docling only
+        # Process each document using local Docling only (sequential for now, concurrency=1)
         for document_url in request.document_urls:
             try:
-                result = self._process_document_local(
+                result = await self._process_document_local(
                     document_url,
                     request.config,
                     request.request_id,
@@ -499,19 +499,19 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
             config_used=request.config,
         )
 
-    def _process_document_local(
+    async def _process_document_local(
         self, document_url: str, config: DoclingConfig, request_id: str, upload_id: str, project_id: str
     ) -> DoclingDocumentResult:
         """Process a document using local Docling."""
         start_time = time.time()
 
         try:
-            # Download document to temporary file
-            temp_file_path = self._download_document(document_url, request_id, upload_id, project_id)
+            # Download document to temporary file (async S3 download)
+            temp_file_path = await self._download_document(document_url, request_id, upload_id, project_id)
 
             try:
                 # Process with Docling directly and return result
-                return self._docling_process_local(
+                return await self._docling_process_local(
                     temp_file_path, document_url, config, request_id, upload_id, project_id
                 )
 
@@ -580,10 +580,10 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
                 processing_time_seconds=processing_time,
             )
 
-    def _download_document(self, document_url: str, request_id: str, upload_id: str, project_id: str) -> str:
+    async def _download_document(self, document_url: str, request_id: str, upload_id: str, project_id: str) -> str:
         """Download document to temporary file and validate if it's an image."""
         try:
-            content = self.storage_service.download_content(
+            content = await self.storage_service.download_content_async(
                 document_url, request_id=request_id, upload_id=upload_id, project_id=project_id
             )
 
@@ -619,10 +619,12 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
         except Exception as e:
             raise Exception(f"Failed to download document from {document_url}: {str(e)}")
 
-    def _docling_process_local(
+    async def _docling_process_local(
         self, file_path: str, document_url: str, config: DoclingConfig, request_id: str, upload_id: str, project_id: str
     ) -> DoclingDocumentResult:
-        """Process document with local Docling (runs in thread pool)."""
+        """Process document with local Docling (wraps blocking Docling in asyncio.to_thread)."""
+        import asyncio
+
         start_time = time.time()
         try:
             # Get or reuse existing DocumentConverter
@@ -638,7 +640,9 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
                     project_id=project_id,
                     request_id=request_id,
                 )
-                conversion_result = doc_converter.convert(file_path)
+                # Wrap Docling convert in asyncio.to_thread() to avoid blocking event loop
+                # This is the ONLY unavoidable blocking operation - Docling library is synchronous C++
+                conversion_result = await asyncio.to_thread(doc_converter.convert, file_path)
                 doc = conversion_result.document
                 self.logger.debug(
                     "Docling conversion completed successfully",
@@ -897,12 +901,12 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
         """Handle successful Docling processing results."""
         try:
             # Extract and store assets (figures and tables) FIRST - populates S3 paths on objects
-            asset_paths = self._extract_and_store_assets(
+            asset_paths = await self._extract_and_store_assets(
                 docling_result=docling_result, project_id=project_id, upload_id=upload_id
             )
 
             # Store main processing results to S3 (per-page) - now with S3 paths populated
-            page_s3_paths = self._store_docling_results(
+            page_s3_paths = await self._store_docling_results(
                 docling_result=docling_result, project_id=project_id, upload_id=upload_id
             )
 
@@ -1106,7 +1110,7 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
             processing_data={"docling_result": empty_result_data, "processing_method": "docling"},
         )
 
-    def _store_docling_results(
+    async def _store_docling_results(
         self, docling_result: DoclingBatchResult, project_id: str, upload_id: str
     ) -> Dict[int, str]:
         """
@@ -1219,8 +1223,8 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
                 # Serialize page results using Pydantic
                 content = page_result.model_dump_json(indent=2).encode("utf-8")
 
-                # Upload to S3
-                s3_path = self.storage_service.upload_content(
+                # Upload to S3 (async to avoid blocking event loop)
+                s3_path = await self.storage_service.upload_content_async(
                     content, bucket, key, upload_id=upload_id, project_id=project_id
                 )
 
@@ -1237,8 +1241,10 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
                 # Store page content as separate text file for easy downstream consumption
                 # while also maintaining the full PageExtractionResult in results.json for
                 # consistency and compatibility with existing pipeline consumers.
+                from src.services.storage_utils import store_text_file_to_s3_async
+
                 text_key = generate_page_text_s3_path(project_id, upload_id, page_number)
-                store_text_file_to_s3(
+                await store_text_file_to_s3_async(
                     storage_service=self.storage_service,
                     logger=self.logger,
                     text_content=page_content,
@@ -1293,7 +1299,7 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
             self.logger.warning("Failed to extract page content", page_number=page_number, error=str(e))
             return f"Page {page_number}: Content extraction failed"
 
-    def _extract_and_store_assets(
+    async def _extract_and_store_assets(
         self, docling_result: DoclingBatchResult, project_id: str, upload_id: str
     ) -> Dict[str, List[str]]:
         """
@@ -1340,9 +1346,9 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
             for page_number in all_page_numbers:
                 doc = doc_by_page.get(page_number)
 
-                # Store figures for this page
+                # Store figures for this page (async to avoid blocking)
                 if page_number in figures_by_page:
-                    stored_figures = self.asset_storage.store_extracted_figures(
+                    stored_figures = await self.asset_storage.store_extracted_figures(
                         doc=doc,
                         extracted_figures=figures_by_page[page_number],
                         project_id=project_id,
@@ -1353,9 +1359,9 @@ class DoclingStrategyProcessor(AbstractProcessingStrategy):
                     figure_paths = [fig.s3_image_path for fig in stored_figures if fig.s3_image_path]
                     asset_paths["figures"].extend(figure_paths)
 
-                # Store tables for this page
+                # Store tables for this page (async to avoid blocking)
                 if page_number in tables_by_page:
-                    stored_tables = self.asset_storage.store_extracted_tables(
+                    stored_tables = await self.asset_storage.store_extracted_tables(
                         doc=doc,
                         extracted_tables=tables_by_page[page_number],
                         project_id=project_id,

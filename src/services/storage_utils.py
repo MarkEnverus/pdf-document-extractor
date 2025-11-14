@@ -46,6 +46,63 @@ def generate_results_json_s3_path(project_id: str, upload_id: str, page_number: 
     return f"{project_id}/{upload_id}/{page_number}/results.json"
 
 
+async def store_text_file_to_s3_async(
+    storage_service: StorageService,
+    logger: Logger,
+    text_content: str,
+    bucket: str,
+    s3_key: str,
+    project_id: str,
+    upload_id: str,
+    log_context: dict[str, Any] | None = None,
+) -> str:
+    """Store text content to S3 with consistent encoding and logging (async version).
+
+    This utility function encapsulates the common pattern of:
+    1. Encoding text content to UTF-8
+    2. Uploading to S3 asynchronously
+    3. Logging the operation with context
+
+    Args:
+        storage_service: Storage service for uploading content
+        logger: Logger instance for operation tracking
+        text_content: Text content to store
+        bucket: S3 bucket name
+        s3_key: S3 key (path) for the file
+        project_id: Project identifier for logging and metadata
+        upload_id: Upload identifier for logging and metadata
+        log_context: Optional additional context for logging (e.g., page_number, figure_id)
+
+    Returns:
+        S3 path (s3://bucket/key) of the stored file
+    """
+    # Encode text content to UTF-8 bytes
+    encoded_content = text_content.encode("utf-8")
+
+    # Upload to S3 asynchronously to avoid blocking event loop
+    s3_path = await storage_service.upload_content_async(
+        content=encoded_content,
+        bucket=bucket,
+        key=s3_key,
+        project_id=project_id,
+        upload_id=upload_id,
+    )
+
+    # Log operation with context
+    log_data = {
+        "s3_path": s3_path,
+        "project_id": project_id,
+        "upload_id": upload_id,
+        "content_size_bytes": len(encoded_content),
+    }
+    if log_context:
+        log_data.update(log_context)
+
+    logger.debug("Stored text file to S3", **log_data)
+
+    return s3_path
+
+
 def store_text_file_to_s3(
     storage_service: StorageService,
     logger: Logger,
@@ -56,7 +113,9 @@ def store_text_file_to_s3(
     upload_id: str,
     log_context: dict[str, Any] | None = None,
 ) -> str:
-    """Store text content to S3 with consistent encoding and logging.
+    """Store text content to S3 with consistent encoding and logging (sync version - DEPRECATED).
+
+    DEPRECATED: Use store_text_file_to_s3_async() instead to avoid blocking the event loop.
 
     This utility function encapsulates the common pattern of:
     1. Encoding text content to UTF-8

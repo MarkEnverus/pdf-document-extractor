@@ -17,7 +17,7 @@ from src.configs.settings import settings
 from src.interfaces.image_analysis import ImageAnalysisService
 from src.interfaces.storage import StorageService
 from src.models.extraction_models import ExtractedFigure, ExtractedTable
-from src.services.storage_utils import store_text_file_to_s3
+from src.services.storage_utils import store_text_file_to_s3_async
 
 logger = Logger.get_logger(__name__)
 
@@ -45,7 +45,7 @@ class AssetStorageService:
         self.image_analysis_service = image_analysis_service
         self.logger = logger
 
-    def store_extracted_figures(
+    async def store_extracted_figures(
         self,
         doc: Optional[DoclingDocument],
         extracted_figures: List[ExtractedFigure],
@@ -88,20 +88,20 @@ class AssetStorageService:
 
                 # Store image and perform analysis if we have data
                 if figure_image_data:
-                    self._store_figure_image(figure, figure_image_data, project_id, upload_id, page_number)
+                    await self._store_figure_image(figure, figure_image_data, project_id, upload_id, page_number)
                     # Always perform Bedrock analysis (required)
-                    analysis_result = self._analyze_figure_with_bedrock(
+                    analysis_result = await self._analyze_figure_with_bedrock(
                         figure, figure_image_data, project_id=project_id, upload_id=upload_id
                     )
                     # Store LLM analysis as separate text file alongside PNG and metadata
                     analysis_summary = analysis_result.get("analysis_summary") if analysis_result else None
                     if analysis_summary and analysis_summary.strip():
-                        self._store_figure_analysis_text(
+                        await self._store_figure_analysis_text(
                             figure, analysis_result, project_id, upload_id, page_number
                         )
 
                 # Create and store metadata (includes analysis results)
-                self._store_figure_metadata(
+                await self._store_figure_metadata(
                     figure, figure_image_data, analysis_result, project_id, upload_id, page_number
                 )
 
@@ -120,7 +120,7 @@ class AssetStorageService:
 
         return updated_figures
 
-    def store_extracted_tables(
+    async def store_extracted_tables(
         self,
         doc: Any,
         extracted_tables: List[ExtractedTable],
@@ -160,10 +160,10 @@ class AssetStorageService:
 
                 # Store CSV data
                 if csv_data:
-                    self._store_table_csv(table, csv_data, project_id, upload_id, page_number)
+                    await self._store_table_csv(table, csv_data, project_id, upload_id, page_number)
 
                 # Create and store metadata
-                self._store_table_metadata(table, csv_data, project_id, upload_id, page_number)
+                await self._store_table_metadata(table, csv_data, project_id, upload_id, page_number)
 
                 updated_tables.append(table)
 
@@ -284,7 +284,7 @@ class AssetStorageService:
             self.logger.error("Failed to export table data", table_id=table_id, error=str(e))
             return None
 
-    def _store_figure_image(
+    async def _store_figure_image(
         self, figure: ExtractedFigure, image_data: bytes, project_id: str, upload_id: str, page_number: int
     ) -> None:
         """Store figure image to S3 and update figure object."""
@@ -298,8 +298,8 @@ class AssetStorageService:
                 asset_type="figures",
             )
 
-            # Upload image to S3
-            s3_image_path = self.storage_service.upload_content(
+            # Upload image to S3 (async to avoid blocking event loop)
+            s3_image_path = await self.storage_service.upload_content_async(
                 image_data, img_bucket, img_key, project_id=project_id, upload_id=upload_id
             )
 
@@ -328,7 +328,7 @@ class AssetStorageService:
                 error=str(e),
             )
 
-    def _store_table_csv(
+    async def _store_table_csv(
         self, table: ExtractedTable, csv_data: str, project_id: str, upload_id: str, page_number: int
     ) -> None:
         """Store table CSV data to S3."""
@@ -341,7 +341,7 @@ class AssetStorageService:
                 asset_type="tables",
             )
 
-            s3_csv_path = self.storage_service.upload_content(
+            s3_csv_path = await self.storage_service.upload_content_async(
                 csv_data.encode("utf-8"), csv_bucket, csv_key, project_id=project_id, upload_id=upload_id
             )
 
@@ -364,7 +364,7 @@ class AssetStorageService:
             )
 
 
-    def _store_figure_analysis_text(
+    async def _store_figure_analysis_text(
         self,
         figure: ExtractedFigure,
         analysis_result: dict[str, Any],
@@ -390,8 +390,8 @@ class AssetStorageService:
             # Extract analysis summary
             analysis_summary = analysis_result.get("analysis_summary", "")
 
-            # Upload text file to S3 using shared utility
-            store_text_file_to_s3(
+            # Upload text file to S3 using shared async utility
+            await store_text_file_to_s3_async(
                 storage_service=self.storage_service,
                 logger=self.logger,
                 text_content=analysis_summary,
@@ -411,7 +411,7 @@ class AssetStorageService:
                 error=str(e),
             )
 
-    def _store_figure_metadata(
+    async def _store_figure_metadata(
         self,
         figure: ExtractedFigure,
         image_data: Optional[bytes],
@@ -468,7 +468,7 @@ class AssetStorageService:
 
             metadata_content = figure_metadata.model_dump_json(indent=2).encode("utf-8")
 
-            s3_metadata_path = self.storage_service.upload_content(
+            s3_metadata_path = await self.storage_service.upload_content_async(
                 metadata_content, metadata_bucket, metadata_key, project_id=project_id, upload_id=upload_id
             )
 
@@ -490,7 +490,7 @@ class AssetStorageService:
                 error=str(e),
             )
 
-    def _analyze_figure_with_bedrock(
+    async def _analyze_figure_with_bedrock(
         self, figure: ExtractedFigure, image_data: bytes, project_id: str, upload_id: str
     ) -> dict[str, Any]:
         """
@@ -501,6 +501,8 @@ class AssetStorageService:
         Returns:
             Dictionary containing analysis results or error information
         """
+        import asyncio
+
         try:
             self.logger.info(
                 "Starting Bedrock analysis for figure",
@@ -516,9 +518,12 @@ class AssetStorageService:
             # Determine image format (enum values are strings, so they work directly)
             image_format = figure.image_format or IngestionMimeType.PNG
 
-            # Perform Bedrock analysis
-            analysis_result = self.image_analysis_service.analyze_image(
-                image_data=image_data, image_format=image_format, context=context
+            # Perform Bedrock analysis in thread pool (boto3 is synchronous)
+            analysis_result = await asyncio.to_thread(
+                self.image_analysis_service.analyze_image,
+                image_data=image_data,
+                image_format=image_format,
+                context=context,
             )
 
             return analysis_result
@@ -540,7 +545,7 @@ class AssetStorageService:
                 "analysis_timestamp": figure.extracted_at.isoformat(),
             }
 
-    def _store_table_metadata(
+    async def _store_table_metadata(
         self,
         table: ExtractedTable,
         csv_data: Optional[str],
@@ -590,7 +595,9 @@ class AssetStorageService:
 
             metadata_content = table_metadata.model_dump_json(indent=2).encode("utf-8")
 
-            s3_metadata_path = self.storage_service.upload_content(metadata_content, metadata_bucket, metadata_key)
+            s3_metadata_path = await self.storage_service.upload_content_async(
+                metadata_content, metadata_bucket, metadata_key, project_id=project_id, upload_id=upload_id
+            )
 
             table.s3_metadata_path = s3_metadata_path
             self.logger.debug(
