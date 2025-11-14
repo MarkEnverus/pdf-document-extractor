@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from idp_file_management.models.mime_type import IngestionMimeType
+from lib.models.mime_type import IngestionMimeType
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 

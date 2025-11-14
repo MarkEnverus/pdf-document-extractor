@@ -14,6 +14,16 @@ class IngestionStepStatus(str, Enum):
     FAILED = "FAILED"
 
 
+class IngestionStatus(str, Enum):
+    """Ingestion pipeline steps/stages."""
+
+    INGESTION = "INGESTION"
+    CLASSIFICATION = "CLASSIFICATION"
+    EXTRACTION = "EXTRACTION"
+    TRANSFORMATION = "TRANSFORMATION"
+    KB_SYNC = "KB_SYNC"
+
+
 class IngestionStepFileStatus(BaseModel):
     """Status of a file in an ingestion step."""
 
@@ -24,8 +34,8 @@ class IngestionStepFileStatus(BaseModel):
     error_message: str | None = None
 
 
-class IngestionStatus(BaseModel):
-    """Overall ingestion status."""
+class IngestionStatusModel(BaseModel):
+    """Overall ingestion status model."""
 
     id: UUID
     status: IngestionStepStatus

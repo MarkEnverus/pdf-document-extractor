@@ -10,7 +10,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from idp_file_management.models.mime_type import IngestionMimeType
+from lib.models.mime_type import IngestionMimeType
 from pydantic import BaseModel, Field
 
 

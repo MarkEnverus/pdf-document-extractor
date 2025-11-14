@@ -7,7 +7,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 
-from lib.models.extraction_models import MimeTypeUtils
+from lib.models.mime_type_utils import MimeTypeUtils
 
 from src.interfaces.document_processor import DocumentProcessingStrategy
 from lib.logger import Logger

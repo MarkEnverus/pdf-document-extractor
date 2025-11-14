@@ -9,7 +9,7 @@ eliminating code duplication and ensuring uniform behavior.
 
 import pathlib
 
-from idp_file_management.models.mime_type import IngestionMimeType
+from lib.models.mime_type import IngestionMimeType
 
 
 class MimeTypeUtils:

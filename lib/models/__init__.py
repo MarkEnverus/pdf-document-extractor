@@ -1,7 +1,6 @@
 """Shared event/message models for IDP pipeline services."""
 
-from idp_file_management.models.mime_type import IngestionMimeType
-
+from .mime_type import IngestionMimeType
 from .extraction_models import (
     BoundingBox,
     ExtractionType,

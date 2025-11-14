@@ -36,11 +36,11 @@ from lib.logger import Logger
 from lib.models.extraction_models import (
     ExtractionType,
     FigureReference,
-    MimeTypeUtils,
     PageExtractionResult,
     PageMetadata,
     TableReference,
 )
+from lib.models.mime_type_utils import MimeTypeUtils
 from src.interfaces.document_processor import AbstractProcessingStrategy
 from src.interfaces.storage import StorageService
 from src.models.docling_models import (

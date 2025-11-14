@@ -10,7 +10,7 @@ from uuid import UUID
 from lib.models.ingestion_status import IngestionStatus, IngestionStepFileStatus
 from lib.models.ingestion_status import IngestionStepStatus as LibIngestionStepStatus
 from lib.logger import Logger
-from lib.models.extraction_models import safe_uuid_conversion
+from lib.models.utils import safe_uuid_conversion
 from src.configs.settings import settings
 from src.interfaces.status_tracker import AbstractStatusTracker
 from src.models.status_models import IngestionStepStatus
@@ -134,7 +134,8 @@ class StatusTracker(AbstractStatusTracker):
 
         try:
             from lib.models.mime_type import IngestionMimeType
-            from lib.models.extraction_models import MimeTypeUtils, PipelineEvent
+            from lib.models.mime_type_utils import MimeTypeUtils
+            from lib.models.pipeline_event import PipelineEvent
 
             # Determine proper MIME type using the helper function
             determined_mime_type_str = MimeTypeUtils.determine_mime_type(
