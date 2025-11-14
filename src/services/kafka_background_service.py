@@ -10,7 +10,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator, Optional
 
-from idp_kafka import Kafka
+from lib.kafka import Kafka
 from lib.logger import Logger
 from src.configs.settings import settings
 from src.models.processing_models import IncomingDocumentProcessingRequest

@@ -1,28 +1,39 @@
 from typing import Any, Literal
 
-from fastapi_utils.config import FastApiSettings
-from py_aws import AWSHelper
-from py_postgres.core.config import PostgresConfig
+from pydantic_settings import BaseSettings
+from pydantic import BaseModel
 
-from idp_kafka.config import KafkaConfig
+from lib.aws import AWSHelper, get_s3_client
+from lib.kafka import KafkaConfig
 from lib.logger import Logger
 
-try:
-    from idp_aws import get_s3_client
 
-    _aws_available = True
-except ImportError:
-    _aws_available = False
-    get_s3_client = None  # type: ignore[assignment]
+# Stub for PostgresConfig (can be replaced with a proper implementation if needed)
+class PostgresConfig(BaseModel):
+    host: str
+    port: int
+    database: str
+    user: str
+    password: str
+    db_schema: str = "public"
+    min_connections: int = 1
+    max_connections: int = 10
+    connection_timeout: float = 10.0
+    debug_queries: bool = False
+    application_name: str = "pdf-document-extractor"
+    server_options: dict[str, Any] = {}
 
 logger = Logger.get_logger(__name__)
 
 
-class Settings(FastApiSettings):
-    PROJECT_NAME: str = "genai-maestro-idp-extraction"
+class Settings(BaseSettings):
+    PROJECT_NAME: str = "pdf-document-extractor"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT_NAME: Literal["local", "test", "dev", "prod"] = "local"
     EXTRACTION_ENDPOINT: str = "https://genai-dev-ue1-mu-genai-mcp-document-extraction-dev"
+
+    # FastAPI configuration
+    allowed_hosts: list[str] = ["*"]
     AWS_REGION: str = "us-east-1"
     S3_BUCKET_NAME: str = "genai-proprietary-data-extract-dev"
 
@@ -76,7 +87,10 @@ class Settings(FastApiSettings):
     # Status Tracker Configuration
     STATUS_ENABLE_KAFKA_PUBLISHING: bool = True
 
-    logger.info(f"Environment Name Settings: {ENVIRONMENT_NAME}")
+    @property
+    def fastapi_kwargs(self) -> dict[str, Any]:
+        """Get FastAPI initialization kwargs."""
+        return {}
 
     def get_kafka_config(self) -> KafkaConfig:
         """Get Kafka configuration with environment-appropriate authentication."""
@@ -112,8 +126,7 @@ class Settings(FastApiSettings):
         )
 
     def get_s3_client(self) -> Any:
-        if not _aws_available or get_s3_client is None:
-            raise ValueError("AWS helper is not available (likely in test environment)")
+        """Get S3 client for file operations."""
         return get_s3_client()
 
     def get_postgres_config(self) -> PostgresConfig:

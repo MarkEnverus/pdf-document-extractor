@@ -6,7 +6,7 @@ import time
 from typing import Dict, Any, Optional
 
 from botocore.exceptions import ClientError, BotoCoreError
-from idp_aws import get_bedrock_runtime_client
+from lib.aws import get_bedrock_runtime_client
 
 from lib.logger import Logger
 from src.interfaces.image_analysis import AbstractImageAnalysisService, ImageAnalysisError

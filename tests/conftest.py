@@ -11,7 +11,7 @@ import pytest
 from unittest.mock import Mock, patch
 
 # Module-level mock for Kafka to prevent real Kafka initialization during test discovery
-_sync_kafka_patcher = patch("idp_kafka.Kafka")
+_sync_kafka_patcher = patch("lib.kafka.Kafka")
 _mock_sync_kafka_class = _sync_kafka_patcher.start()
 
 # Configure the mock to return a properly mocked instance
@@ -247,7 +247,7 @@ def test_status_tracker():
 
     # Mock database service to prevent real database connections during tests
     with patch("src.services.status_tracker.ingestion_status_service") as mock_status_service, patch(
-        "idp_kafka.Kafka"
+        "lib.kafka.Kafka"
     ) as mock_sync_kafka_class:
         mock_status_service.upsert_file_status = AsyncMock(return_value=None)
 
@@ -335,7 +335,7 @@ def test_extraction_client():
 @pytest.fixture
 def test_logger():
     """Provide a logger instance for testing."""
-    from idp_logger.logger import Logger
+    from lib.logger import Logger
 
     return Logger.get_logger("test")
 

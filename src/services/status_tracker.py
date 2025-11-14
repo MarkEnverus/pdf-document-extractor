@@ -17,7 +17,7 @@ from src.models.status_models import IngestionStepStatus
 from src.services.imported_services import ingestion_status_service
 
 if TYPE_CHECKING:
-    from idp_kafka import Kafka
+    from lib.kafka import Kafka
 
 logger = Logger.get_logger(__name__)
 
@@ -79,7 +79,7 @@ class StatusTracker(AbstractStatusTracker):
     async def _init_kafka(self) -> None:
         """Initialize Kafka service for publishing status updates."""
         try:
-            from idp_kafka import Kafka
+            from lib.kafka import Kafka
 
             kafka_config = settings.get_kafka_config()
             # Create producer-only async Kafka instance

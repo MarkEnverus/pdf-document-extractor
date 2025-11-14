@@ -30,6 +30,9 @@ dependencies = [
     "pyyaml>=6.0,<7.0.0",
     "psutil==7.0.0",
 
+    # Kafka
+    "aiokafka>=0.8.0",
+
     # Observability (optional)
     "opentelemetry-api>=1.36.0,<2.0.0",
     "opentelemetry-sdk>=1.36.0,<2.0.0",

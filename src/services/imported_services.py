@@ -1,13 +1,15 @@
-from idp_file_management import get_file_upload_tracking_service
-from idp_ingestion_status import get_ingestion_status_service
+"""
+Stub for imported services from monorepo.
 
-from src.core.postgres_connection_manager import (
-    get_async_connection,
-    get_sync_connection,
-)
+These services were used for tracking file upload status and ingestion status
+in the full genai-idp monorepo. They are stubbed out here for the standalone extractor.
 
-file_upload_tracking_service = get_file_upload_tracking_service(get_sync_connection(), get_async_connection())
+If you need these features, you can either:
+1. Implement lightweight versions
+2. Copy the relevant libraries from the monorepo
+3. Use a different status tracking mechanism
+"""
 
-ingestion_status_service = get_ingestion_status_service(
-    get_sync_connection(), get_async_connection(), file_upload_tracking_service
-)
+# Stub implementations - replace with actual implementations if needed
+file_upload_tracking_service = None
+ingestion_status_service = None
