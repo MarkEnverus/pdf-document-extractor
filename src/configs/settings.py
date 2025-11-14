@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     BEDROCK_IMAGE_ANALYSIS_MAX_TOKENS: int = 1024
     BEDROCK_IMAGE_ANALYSIS_TEMPERATURE: float = 0.1
 
+    # Kafka Configuration
+    ENABLE_KAFKA: bool = False  # Disable Kafka for local development by default
+
     # Status Tracker Configuration
     STATUS_ENABLE_KAFKA_PUBLISHING: bool = True
 

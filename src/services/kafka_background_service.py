@@ -370,6 +370,16 @@ async def kafka_lifespan(app: Any) -> AsyncGenerator[None, None]:
         from src.services.kafka_background_service import kafka_lifespan
         app = FastAPI(lifespan=kafka_lifespan)
     """
+    # Check if Kafka is enabled
+    if not settings.ENABLE_KAFKA:
+        logger.info(
+            "Kafka background service disabled via ENABLE_KAFKA=False",
+            environment=settings.ENVIRONMENT_NAME,
+            service="kafka_background",
+        )
+        yield
+        return
+
     # Startup - create service with dependency injection
     logger.info("Application startup - initializing Kafka background service")
     service = await create_kafka_background_service()
